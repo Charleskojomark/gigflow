@@ -3,7 +3,7 @@
   "info": {
     "title": "GigFlow API Documentation",
     "version": "1.0.0",
-    "description": "Production-grade backend REST API for a freelance marketplace. Covers auth, job feeds, bidding, escrow contracts, real-time messaging, and Paystack payments."
+    "description": "Production-grade backend REST API for a freelance marketplace. Covers auth, user profiles, job feeds, bidding, escrow contracts, real-time messaging, and Paystack payments."
   },
   "servers": [
     {
@@ -21,7 +21,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Enter your short-lived access JWT token."
+        "description": "Enter your short-lived Access Token JWT."
       }
     },
     "schemas": {
@@ -48,7 +48,7 @@
         "required": ["title", "description", "category", "budget", "deadline"],
         "properties": {
           "title": { "type": "string", "example": "Build a REST API in Node.js" },
-          "description": { "type": "string", "example": "Need a developer to design and build an escrow payment API with express." },
+          "description": { "type": "string", "example": "Need an experienced developer to design and build an escrow payment API with express." },
           "category": { "type": "string", "example": "web_development" },
           "budget": { "type": "number", "example": 1500 },
           "deadline": { "type": "string", "format": "date-time", "example": "2026-06-10T12:00:00Z" },
@@ -70,85 +70,88 @@
         "properties": {
           "amount": { "type": "number", "example": 5000, "description": "Deposit amount in NGN/USD" }
         }
+      },
+      "MilestoneInput": {
+        "type": "object",
+        "required": ["title", "amount", "dueDate"],
+        "properties": {
+          "title": { "type": "string", "example": "Backend Architecture & Setup" },
+          "amount": { "type": "number", "example": 500 },
+          "dueDate": { "type": "string", "format": "date-time", "example": "2026-06-05T12:00:00Z" }
+        }
+      },
+      "WithdrawalInput": {
+        "type": "object",
+        "required": ["amount", "accountNumber", "bankCode"],
+        "properties": {
+          "amount": { "type": "number", "example": 3000 },
+          "accountNumber": { "type": "string", "example": "0123456789" },
+          "bankCode": { "type": "string", "example": "058" }
+        }
       }
     }
   },
   "paths": {
     "/health": {
       "get": {
-        "summary": "Retrieve system health metrics",
-        "description": "Checks the health of key services like MongoDB and Redis.",
+        "summary": "System Health",
+        "tags": ["Diagnostics"],
+        "description": "Checks the operational status of database connection and redis instance.",
         "responses": {
-          "200": {
-            "description": "API is healthy and active"
-          }
+          "200": { "description": "Healthy" },
+          "503": { "description": "Degraded state (disconnected services)" }
         }
       }
     },
     "/metrics": {
       "get": {
-        "summary": "Retrieve server performance metrics",
-        "description": "Returns container memory usage and uptime data.",
+        "summary": "Container Metrics",
+        "tags": ["Diagnostics"],
+        "description": "Returns memory usage and container uptime details.",
         "responses": {
-          "200": {
-            "description": "Metrics retrieved successfully"
-          }
+          "200": { "description": "Metrics retrieved" }
         }
       }
     },
     "/api/auth/register": {
       "post": {
-        "summary": "Register a new user account",
-        "description": "Creates a freelancer or client account and fires an OTP to their email.",
+        "summary": "Register User",
+        "tags": ["Auth"],
+        "description": "Registers a new Client or Freelancer account.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterInput"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/RegisterInput" } }
           }
         },
         "responses": {
-          "201": {
-            "description": "Registration successful"
-          },
-          "409": {
-            "description": "Email already in use"
-          }
+          "201": { "description": "Successfully registered" }
         }
       }
     },
     "/api/auth/login": {
       "post": {
-        "summary": "Login and retrieve authentication tokens",
-        "description": "Exchanges email and password for JWT Access and Refresh tokens.",
+        "summary": "User Login",
+        "tags": ["Auth"],
+        "description": "Authenticate user credentials and receive JWT Access/Refresh tokens.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginInput"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/LoginInput" } }
           }
         },
         "responses": {
-          "200": {
-            "description": "Login successful"
-          },
-          "403": {
-            "description": "Email verification pending"
-          }
+          "200": { "description": "Login successful" },
+          "403": { "description": "Email not verified or suspended" }
         }
       }
     },
     "/api/auth/verify-email": {
       "post": {
-        "summary": "Verify registration email",
-        "description": "Submits a 6-digit OTP code to verify the user account.",
+        "summary": "Verify Email",
+        "tags": ["Auth"],
         "security": [{ "BearerAuth": [] }],
+        "description": "Verify email via 6-digit OTP code.",
         "requestBody": {
           "required": true,
           "content": {
@@ -164,67 +167,303 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Email verified successfully"
-          }
+          "200": { "description": "Verified" }
         }
       }
     },
-    "/api/jobs": {
-      "get": {
-        "summary": "Get paginated job listings feed",
-        "description": "Fetches job listings with query filters. Paginated and cached in Redis with a 5-minute TTL.",
-        "parameters": [
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search keyword" },
-          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Job category" },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }
-        ],
-        "responses": {
-          "200": {
-            "description": "Feed retrieved successfully"
-          }
-        }
-      },
+    "/api/auth/resend-otp": {
       "post": {
-        "summary": "Post a new job contract",
-        "description": "Allows registered Clients to submit a job specification. Invalidates the Redis feed cache.",
+        "summary": "Resend OTP",
+        "tags": ["Auth"],
+        "security": [{ "BearerAuth": [] }],
+        "description": "Resends verification code to the registered email.",
+        "responses": {
+          "200": { "description": "Resent" }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "summary": "Refresh Token",
+        "tags": ["Auth"],
+        "description": "Rotates refresh token and generates a new access token.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["refreshToken"],
+                "properties": {
+                  "refreshToken": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Rotated" }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "User Logout",
+        "tags": ["Auth"],
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/JobInput"
+                "type": "object",
+                "required": ["refreshToken"],
+                "properties": {
+                  "refreshToken": { "type": "string" }
+                }
               }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "Job created"
+          "200": { "description": "Logged out" }
+        }
+      }
+    },
+    "/api/auth/kyc": {
+      "post": {
+        "summary": "Upload KYC Doc",
+        "tags": ["Auth"],
+        "security": [{ "BearerAuth": [] }],
+        "description": "Upload a PDF/Image identification document to Cloudinary.",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["document"],
+                "properties": {
+                  "document": { "type": "string", "format": "binary" }
+                }
+              }
+            }
           }
+        },
+        "responses": {
+          "200": { "description": "Uploaded" }
+        }
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "summary": "Get Profile",
+        "tags": ["Users"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Profile info" }
+        }
+      },
+      "patch": {
+        "summary": "Update Profile",
+        "tags": ["Users"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "example": "Mark Charles" },
+                  "skills": { "type": "array", "items": { "type": "string" }, "example": ["typescript", "docker"] },
+                  "title": { "type": "string", "example": "Senior DevOps Engineer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated" }
+        }
+      }
+    },
+    "/api/users/me/photo": {
+      "patch": {
+        "summary": "Upload Profile Photo",
+        "tags": ["Users"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["photo"],
+                "properties": {
+                  "photo": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Photo updated" }
+        }
+      }
+    },
+    "/api/users/me/wallet": {
+      "get": {
+        "summary": "Get Wallet Info",
+        "tags": ["Users"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Wallet balances & ledger transactions" }
+        }
+      }
+    },
+    "/api/users/me/portfolio": {
+      "post": {
+        "summary": "Add Portfolio Item",
+        "tags": ["Users"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "description"],
+                "properties": {
+                  "title": { "type": "string", "example": "Payment Escrow Library" },
+                  "description": { "type": "string", "example": "Built a custom escrow logic." },
+                  "link": { "type": "string", "example": "https://github.com/Charleskojomark" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Portfolio item added" }
+        }
+      }
+    },
+    "/api/users/me/portfolio/{itemId}": {
+      "delete": {
+        "summary": "Delete Portfolio Item",
+        "tags": ["Users"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Deleted" }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "summary": "Get Public Profile",
+        "tags": ["Users"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Public profile summary" }
+        }
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "summary": "Get Job Listings Feed",
+        "tags": ["Jobs"],
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search text matching tags or content" },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": {
+          "200": { "description": "Lists active jobs" }
+        }
+      },
+      "post": {
+        "summary": "Post Job Specs",
+        "tags": ["Jobs"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/JobInput" } }
+          }
+        },
+        "responses": {
+          "201": { "description": "Job posting saved" }
         }
       }
     },
     "/api/jobs/{id}": {
       "get": {
-        "summary": "Retrieve specific job specifications",
-        "description": "Retrieves the detail specifications of a job and increments its views counter.",
+        "summary": "Get Job Specification Details",
+        "tags": ["Jobs"],
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": {
-            "description": "Job details fetched"
+          "200": { "description": "Job details" }
+        }
+      },
+      "put": {
+        "summary": "Edit Job Specification Details",
+        "tags": ["Jobs"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/JobInput" } }
           }
+        },
+        "responses": {
+          "200": { "description": "Job updated" }
+        }
+      },
+      "delete": {
+        "summary": "Cancel Job Contract Specs",
+        "tags": ["Jobs"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Job deleted" }
+        }
+      }
+    },
+    "/api/bids/mine": {
+      "get": {
+        "summary": "My Submitted Bids",
+        "tags": ["Bids"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Bids array" }
         }
       }
     },
     "/api/bids/job/{jobId}": {
+      "get": {
+        "summary": "View Bids on Job",
+        "tags": ["Bids"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "jobId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of bids for this job" }
+        }
+      },
       "post": {
-        "summary": "Place a bid on a job",
-        "description": "Allows registered Freelancers to place a bid on an active client posting.",
+        "summary": "Submit Bid Proposal",
+        "tags": ["Bids"],
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "name": "jobId", "in": "path", "required": true, "schema": { "type": "string" } }
@@ -232,51 +471,472 @@
         "requestBody": {
           "required": true,
           "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/BidInput" } }
+          }
+        },
+        "responses": {
+          "201": { "description": "Bid successfully placed" }
+        }
+      }
+    },
+    "/api/bids/{bidId}/accept": {
+      "patch": {
+        "summary": "Accept Bid & Create Contract",
+        "tags": ["Bids"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "bidId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Bid accepted and contract generated" }
+        }
+      }
+    },
+    "/api/bids/{bidId}/withdraw": {
+      "patch": {
+        "summary": "Withdraw Proposal",
+        "tags": ["Bids"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "bidId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Bid withdrawn" }
+        }
+      }
+    },
+    "/api/contracts": {
+      "get": {
+        "summary": "Get My Active Contracts",
+        "tags": ["Contracts"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Contracts list" }
+        }
+      }
+    },
+    "/api/contracts/{id}": {
+      "get": {
+        "summary": "Contract Specifications Details",
+        "tags": ["Contracts"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Contract details" }
+        }
+      }
+    },
+    "/api/contracts/{id}/milestones": {
+      "post": {
+        "summary": "Add Milestones to Contract",
+        "tags": ["Contracts"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BidInput"
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/MilestoneInput" }
               }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "Bid submitted successfully"
+          "201": { "description": "Milestones added" }
+        }
+      }
+    },
+    "/api/contracts/{id}/milestones/{mId}/deliverable": {
+      "post": {
+        "summary": "Submit Deliverables",
+        "tags": ["Contracts"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "mId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["contentUrl"],
+                "properties": {
+                  "contentUrl": { "type": "string", "example": "https://github.com/deliverable" },
+                  "notes": { "type": "string", "example": "Finished components." }
+                }
+              }
+            }
           }
+        },
+        "responses": {
+          "200": { "description": "Deliverable updated" }
+        }
+      }
+    },
+    "/api/contracts/{id}/milestones/{mId}/approve": {
+      "patch": {
+        "summary": "Approve Milestone & Release Escrow",
+        "tags": ["Contracts"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "mId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Milestone approved and payouts released" }
+        }
+      }
+    },
+    "/api/contracts/{id}/dispute": {
+      "post": {
+        "summary": "Raise Contract Dispute",
+        "tags": ["Contracts"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "reason": { "type": "string", "example": "Seller went offline." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Dispute opened" }
+        }
+      }
+    },
+    "/api/contracts/{id}/review": {
+      "post": {
+        "summary": "Write Contract Review",
+        "tags": ["Contracts"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["rating", "comment"],
+                "properties": {
+                  "rating": { "type": "number", "minimum": 1, "maximum": 5, "example": 5 },
+                  "comment": { "type": "string", "example": "Work completed fast." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Review saved" }
         }
       }
     },
     "/api/payments/deposit": {
       "post": {
-        "summary": "Initiate deposit transaction",
-        "description": "Triggers the Paystack payment gateway initialization flow, returning the checkout url.",
+        "summary": "Deposit Wallet Funds",
+        "tags": ["Payments"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/DepositInput" } }
+          }
+        },
+        "responses": {
+          "200": { "description": "Checkout link initialized" }
+        }
+      }
+    },
+    "/api/payments/webhook": {
+      "post": {
+        "summary": "Paystack Event Webhook Handler",
+        "tags": ["Payments"],
+        "description": "Receives callbacks from Paystack, verifies signatures, and updates balances.",
+        "responses": {
+          "200": { "description": "Processed" }
+        }
+      }
+    },
+    "/api/payments/escrow/lock": {
+      "post": {
+        "summary": "Lock Milestone Funds in Escrow",
+        "tags": ["Payments"],
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DepositInput"
+                "type": "object",
+                "required": ["contractId", "milestoneId"],
+                "properties": {
+                  "contractId": { "type": "string" },
+                  "milestoneId": { "type": "string" }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Paystack session initialized"
+          "200": { "description": "Locked" }
+        }
+      }
+    },
+    "/api/payments/withdraw": {
+      "post": {
+        "summary": "Initiate Wallet Withdrawal Transfer",
+        "tags": ["Payments"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalInput" } }
           }
+        },
+        "responses": {
+          "200": { "description": "Transfer queued" }
         }
       }
     },
     "/api/payments/history": {
       "get": {
-        "summary": "Retrieve user wallet transaction history",
-        "description": "Fetches a full transaction ledger including escrow hold, deposits, payouts, and commissions.",
+        "summary": "Get Ledger Transactions History",
+        "tags": ["Payments"],
         "security": [{ "BearerAuth": [] }],
         "responses": {
-          "200": {
-            "description": "Ledger history retrieved"
+          "200": { "description": "Ledger details" }
+        }
+      }
+    },
+    "/api/contracts/{contractId}/messages": {
+      "get": {
+        "summary": "Fetch Chat Thread Messages",
+        "tags": ["Messages"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "contractId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 30 } }
+        ],
+        "responses": {
+          "200": { "description": "Messages list" }
+        }
+      },
+      "post": {
+        "summary": "Send Text Chat Message",
+        "tags": ["Messages"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "contractId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["content"],
+                "properties": {
+                  "content": { "type": "string", "example": "Hey, I started the task!" }
+                }
+              }
+            }
           }
+        },
+        "responses": {
+          "201": { "description": "Message dispatched" }
+        }
+      }
+    },
+    "/api/contracts/{contractId}/messages/file": {
+      "post": {
+        "summary": "Upload and Share Chat File",
+        "tags": ["Messages"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "contractId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "File sent" }
+        }
+      }
+    },
+    "/api/contracts/{contractId}/messages/read": {
+      "patch": {
+        "summary": "Send Read Receipts",
+        "tags": ["Messages"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "contractId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Marked messages as read" }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "summary": "Get Notifications List",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List array" }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "patch": {
+        "summary": "Mark Notification Read",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Updated" }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "patch": {
+        "summary": "Mark All Notifications Read",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "All read" }
+        }
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "summary": "Get Platform KPIs Stats",
+        "tags": ["Admin"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "KPI stats Object" }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "summary": "List Platform Users",
+        "tags": ["Admin"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "role", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Users list" }
+        }
+      }
+    },
+    "/api/admin/users/{id}/suspend": {
+      "patch": {
+        "summary": "Suspend User Account",
+        "tags": ["Admin"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Suspended" }
+        }
+      }
+    },
+    "/api/admin/users/{id}/activate": {
+      "patch": {
+        "summary": "Activate Suspended User",
+        "tags": ["Admin"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Re-activated" }
+        }
+      }
+    },
+    "/api/admin/users/{id}/kyc": {
+      "patch": {
+        "summary": "Review User KYC Document Status",
+        "tags": ["Admin"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": { "type": "string", "enum": ["approved", "rejected"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "KYC status updated" }
+        }
+      }
+    },
+    "/api/admin/jobs": {
+      "get": {
+        "summary": "List Jobs for Moderation",
+        "tags": ["Admin"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Jobs array" }
+        }
+      }
+    },
+    "/api/admin/jobs/{id}/cancel": {
+      "patch": {
+        "summary": "Force Cancel Active Job",
+        "tags": ["Admin"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Job canceled by administrator" }
         }
       }
     }
