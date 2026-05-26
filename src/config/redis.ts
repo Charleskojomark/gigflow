@@ -2,10 +2,7 @@ import Redis from 'ioredis';
 import { env } from './env';
 import { logger } from '../utils/logger';
 
-const redisConfig = {
-  host: env.redis.host,
-  port: env.redis.port,
-  password: env.redis.password,
+const redisConfig: any = {
   lazyConnect: true,
   retryStrategy(times: number) {
     if (times > 5) {
@@ -21,7 +18,15 @@ const redisConfig = {
   },
 };
 
-export const redis = new Redis(redisConfig);
+if (!env.redis.url) {
+  redisConfig.host = env.redis.host;
+  redisConfig.port = env.redis.port;
+  redisConfig.password = env.redis.password;
+}
+
+export const redis = env.redis.url
+  ? new Redis(env.redis.url, redisConfig)
+  : new Redis(redisConfig);
 
 redis.on('connect', () => logger.info('Redis connected'));
 redis.on('ready', () => logger.info('Redis ready'));
