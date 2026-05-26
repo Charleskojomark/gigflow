@@ -1,0 +1,284 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "GigFlow API Documentation",
+    "version": "1.0.0",
+    "description": "Production-grade backend REST API for a freelance marketplace. Covers auth, job feeds, bidding, escrow contracts, real-time messaging, and Paystack payments."
+  },
+  "servers": [
+    {
+      "url": "https://gigflow-452919660880.us-central1.run.app",
+      "description": "Production Server"
+    },
+    {
+      "url": "http://localhost:5000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your short-lived access JWT token."
+      }
+    },
+    "schemas": {
+      "RegisterInput": {
+        "type": "object",
+        "required": ["name", "email", "password"],
+        "properties": {
+          "name": { "type": "string", "example": "Charles Mark" },
+          "email": { "type": "string", "format": "email", "example": "markcharleskojo@gmail.com" },
+          "password": { "type": "string", "example": "Password123" },
+          "role": { "type": "string", "enum": ["client", "freelancer"], "default": "freelancer" }
+        }
+      },
+      "LoginInput": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "markcharleskojo@gmail.com" },
+          "password": { "type": "string", "example": "Password123" }
+        }
+      },
+      "JobInput": {
+        "type": "object",
+        "required": ["title", "description", "category", "budget", "deadline"],
+        "properties": {
+          "title": { "type": "string", "example": "Build a REST API in Node.js" },
+          "description": { "type": "string", "example": "Need a developer to design and build an escrow payment API with express." },
+          "category": { "type": "string", "example": "web_development" },
+          "budget": { "type": "number", "example": 1500 },
+          "deadline": { "type": "string", "format": "date-time", "example": "2026-06-10T12:00:00Z" },
+          "tags": { "type": "array", "items": { "type": "string" }, "example": ["node", "express", "redis"] }
+        }
+      },
+      "BidInput": {
+        "type": "object",
+        "required": ["amount", "proposal", "deliveryDays"],
+        "properties": {
+          "amount": { "type": "number", "example": 1200 },
+          "proposal": { "type": "string", "example": "I have extensive experience with Node.js and Express. I can complete this on time." },
+          "deliveryDays": { "type": "number", "example": 7 }
+        }
+      },
+      "DepositInput": {
+        "type": "object",
+        "required": ["amount"],
+        "properties": {
+          "amount": { "type": "number", "example": 5000, "description": "Deposit amount in NGN/USD" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Retrieve system health metrics",
+        "description": "Checks the health of key services like MongoDB and Redis.",
+        "responses": {
+          "200": {
+            "description": "API is healthy and active"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Retrieve server performance metrics",
+        "description": "Returns container memory usage and uptime data.",
+        "responses": {
+          "200": {
+            "description": "Metrics retrieved successfully"
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "Register a new user account",
+        "description": "Creates a freelancer or client account and fires an OTP to their email.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registration successful"
+          },
+          "409": {
+            "description": "Email already in use"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login and retrieve authentication tokens",
+        "description": "Exchanges email and password for JWT Access and Refresh tokens.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful"
+          },
+          "403": {
+            "description": "Email verification pending"
+          }
+        }
+      }
+    },
+    "/api/auth/verify-email": {
+      "post": {
+        "summary": "Verify registration email",
+        "description": "Submits a 6-digit OTP code to verify the user account.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["otp"],
+                "properties": {
+                  "otp": { "type": "string", "example": "123456" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email verified successfully"
+          }
+        }
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "summary": "Get paginated job listings feed",
+        "description": "Fetches job listings with query filters. Paginated and cached in Redis with a 5-minute TTL.",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search keyword" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Job category" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feed retrieved successfully"
+          }
+        }
+      },
+      "post": {
+        "summary": "Post a new job contract",
+        "description": "Allows registered Clients to submit a job specification. Invalidates the Redis feed cache.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job created"
+          }
+        }
+      }
+    },
+    "/api/jobs/{id}": {
+      "get": {
+        "summary": "Retrieve specific job specifications",
+        "description": "Retrieves the detail specifications of a job and increments its views counter.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job details fetched"
+          }
+        }
+      }
+    },
+    "/api/bids/job/{jobId}": {
+      "post": {
+        "summary": "Place a bid on a job",
+        "description": "Allows registered Freelancers to place a bid on an active client posting.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "jobId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BidInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bid submitted successfully"
+          }
+        }
+      }
+    },
+    "/api/payments/deposit": {
+      "post": {
+        "summary": "Initiate deposit transaction",
+        "description": "Triggers the Paystack payment gateway initialization flow, returning the checkout url.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Paystack session initialized"
+          }
+        }
+      }
+    },
+    "/api/payments/history": {
+      "get": {
+        "summary": "Retrieve user wallet transaction history",
+        "description": "Fetches a full transaction ledger including escrow hold, deposits, payouts, and commissions.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Ledger history retrieved"
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,8 @@ import express, { Application } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
+import swaggerDocument from './config/swagger.json';
 
 import { env } from './config/env';
 import { requestIdMiddleware } from './middleware/requestId.middleware';
@@ -48,6 +50,7 @@ export const createApp = (): Application => {
   app.use('/api', apiLimiter);
 
   // --- Routes ---
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   app.use('/', healthRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
