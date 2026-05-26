@@ -7,3 +7,4 @@ coverage/
 .env.production
 uploads/
 *.tgz
+env.yaml
