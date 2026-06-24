@@ -40,7 +40,7 @@ const streamUpload = (buffer: Buffer, folder: string): Promise<string> =>
   });
 
 export class AuthService {
-  async register(input: RegisterInput): Promise<IUser> {
+  async register(input: RegisterInput): Promise<{ user: IUser; tokens: AuthTokens }> {
     const existing = await User.findOne({ email: input.email });
     if (existing) throw createError('Email already in use', 409);
 
@@ -56,7 +56,13 @@ export class AuthService {
     await storeOtp(user._id.toString(), otp);
     await sendOtpEmail(user.email, otp);
 
-    return user;
+    const payload = { userId: user._id.toString(), role: user.role, email: user.email };
+    const tokens: AuthTokens = {
+      accessToken: generateAccessToken(payload),
+      refreshToken: generateRefreshToken(payload),
+    };
+
+    return { user, tokens };
   }
 
   async verifyEmail(userId: string, otp: string): Promise<IUser> {

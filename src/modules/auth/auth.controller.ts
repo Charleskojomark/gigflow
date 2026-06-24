@@ -7,12 +7,17 @@ const authService = new AuthService();
 export class AuthController {
   async register(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = await authService.register(req.body);
+      const { user, tokens } = await authService.register(req.body);
       successResponse({
         res,
         statusCode: 201,
         message: 'Registration successful. Check your email for OTP.',
-        data: { userId: user._id, email: user.email, role: user.role },
+        data: {
+          userId: user._id,
+          email: user.email,
+          role: user.role,
+          ...tokens,
+        },
       });
     } catch (err) {
       next(err);
